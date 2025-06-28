@@ -207,7 +207,7 @@ jobs:
 
           # Update the existing release created by gh-extension-precompile with AI-generated notes
           if gh release edit "v${NEW_VERSION}" \
-            --title "Release v${NEW_VERSION} (${VERSION_BUMP})" \
+            --title "v${NEW_VERSION}" \
             --notes "$RELEASE_NOTES" \
             --latest; then
             echo "✅ Release v${NEW_VERSION} updated successfully"
