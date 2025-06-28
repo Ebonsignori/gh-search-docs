@@ -39,8 +39,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Ebonsignori/gh-search-docs/searchdocs"
 	"github.com/charmbracelet/glamour"
+
+	"github.com/Ebonsignori/gh-search-docs/searchdocs"
 )
 
 const endpoint = "https://docs.github.com/api/search/v1"

@@ -11,11 +11,7 @@ Search results are returned from the search API provided by [docs.github.com](ht
 Install this extension using the GitHub CLI:
 
 ```bash
-# Install from a local directory (for development)
-gh extension install .
-
-# Or install from GitHub repository (once published)
-gh extension install <your-username>/gh-search-docs
+gh extension install ebonsignori/gh-search-docs
 ```
 
 ### Prerequisites

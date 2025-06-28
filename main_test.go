@@ -643,27 +643,27 @@ func TestStringSliceEdgeCases(t *testing.T) {
 		{
 			name: "duplicate values",
 			setup: func(ss *StringSlice) {
-				ss.Set("title")
-				ss.Set("title")
-				ss.Set("content")
+				_ = ss.Set("title")
+				_ = ss.Set("title")
+				_ = ss.Set("content")
 			},
 			expected: "title,title,content",
 		},
 		{
 			name: "empty strings",
 			setup: func(ss *StringSlice) {
-				ss.Set("")
-				ss.Set("title")
-				ss.Set("")
+				_ = ss.Set("")
+				_ = ss.Set("title")
+				_ = ss.Set("")
 			},
 			expected: ",title,",
 		},
 		{
 			name: "special characters",
 			setup: func(ss *StringSlice) {
-				ss.Set("title,with,commas")
-				ss.Set("content with spaces")
-				ss.Set("content_with_underscores")
+				_ = ss.Set("title,with,commas")
+				_ = ss.Set("content with spaces")
+				_ = ss.Set("content_with_underscores")
 			},
 			expected: "title,with,commas,content with spaces,content_with_underscores",
 		},

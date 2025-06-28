@@ -11,10 +11,10 @@ import (
 func TestLoadSupportedVersions(t *testing.T) {
 	// Save current directory and change to project root
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
+	defer func() { _ = os.Chdir(oldDir) }()
 
 	// Go up one directory to project root where data/ exists
-	os.Chdir("..")
+	_ = os.Chdir("..")
 
 	// Test loading from existing file
 	versions, err := LoadSupportedVersions()
@@ -55,10 +55,10 @@ func TestLoadSupportedVersionsFileNotFound(t *testing.T) {
 	// Create a temporary directory without the versions file
 	tmpDir := t.TempDir()
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
+	defer func() { _ = os.Chdir(oldDir) }()
 
 	// Change to temp directory where no data file exists
-	os.Chdir(tmpDir)
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path to point to temp directory
 	originalExecutable := os.Args[0]
@@ -75,7 +75,7 @@ func TestLoadSupportedVersionsInvalidJSON(t *testing.T) {
 	// Create temp directory with invalid JSON file
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, "data")
-	os.MkdirAll(dataDir, 0755)
+	_ = os.MkdirAll(dataDir, 0755)
 
 	// Write invalid JSON
 	invalidJSON := `{"lastUpdated": "invalid-json"`
@@ -85,8 +85,8 @@ func TestLoadSupportedVersionsInvalidJSON(t *testing.T) {
 	}
 
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path
 	originalExecutable := os.Args[0]
@@ -129,8 +129,8 @@ func TestIsVersionSupportedFallback(t *testing.T) {
 	// Test fallback behavior when file loading fails
 	tmpDir := t.TempDir()
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path to point to temp directory without data file
 	originalExecutable := os.Args[0]
@@ -190,8 +190,8 @@ func TestNormalizeVersionFallback(t *testing.T) {
 	// Test fallback behavior when versions file can't be loaded
 	tmpDir := t.TempDir()
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path to point to temp directory without data file
 	originalExecutable := os.Args[0]
@@ -415,10 +415,7 @@ func TestFatal(t *testing.T) {
 	// We can't directly test Fatal as it calls os.Exit(1)
 	// But we can test that it exists and has the right signature
 	// This is more of a compile-time check
-	var fn func(error) = Fatal
-	if fn == nil {
-		t.Error("Fatal function should exist")
-	}
+	_ = Fatal
 
 	// We could use a more sophisticated approach with subprocess testing,
 	// but for coverage purposes, this ensures the function is accessible
@@ -469,7 +466,7 @@ func TestLoadSupportedVersionsWithValidFile(t *testing.T) {
 	// Create a temporary directory with a valid versions file
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, "data")
-	os.MkdirAll(dataDir, 0755)
+	_ = os.MkdirAll(dataDir, 0755)
 
 	validVersions := SupportedVersions{
 		LastUpdated:       "2023-06-01T12:00:00Z",
@@ -484,8 +481,8 @@ func TestLoadSupportedVersionsWithValidFile(t *testing.T) {
 	}
 
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path
 	originalExecutable := os.Args[0]
@@ -510,7 +507,7 @@ func TestNormalizeVersionWithCustomFile(t *testing.T) {
 	// Create a temporary directory with a custom versions file
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, "data")
-	os.MkdirAll(dataDir, 0755)
+	_ = os.MkdirAll(dataDir, 0755)
 
 	validVersions := SupportedVersions{
 		LastUpdated:       "2023-06-01T12:00:00Z",
@@ -525,8 +522,8 @@ func TestNormalizeVersionWithCustomFile(t *testing.T) {
 	}
 
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tmpDir)
 
 	// Mock executable path
 	originalExecutable := os.Args[0]
