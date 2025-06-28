@@ -6,6 +6,8 @@ A [CLI Extension](https://docs.github.com/en/github-cli/github-cli/using-github-
 
 Search results are returned from the search API provided by [docs.github.com](https://docs.github.com/en).
 
+![Demonstration of using `gh search-docs` to ask "ssh key" and getting 5 results.](./docs/demo.gif)
+
 ## Installation
 
 Install this extension using the GitHub CLI:
