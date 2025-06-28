@@ -1,0 +1,20 @@
+{
+  "name": "gh-search-docs-release-scripts",
+  "version": "1.0.0",
+  "description": "Release automation scripts for gh-search-docs",
+  "type": "module",
+  "scripts": {
+    "analyze-release": "node analyze-release.js",
+    "manual-release": "node manual-release.js",
+    "test": "node test-local.js",
+    "test-tag": "node test-tag-release.js",
+    "setup": "node setup.js"
+  },
+  "dependencies": {
+    "openai": "^4.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

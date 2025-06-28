@@ -1,0 +1,179 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: "Force a specific version (e.g., 1.2.3) - leave empty for AI analysis"
+        required: false
+        type: string
+      force_bump:
+        description: "Force a specific version bump type"
+        required: false
+        type: choice
+        options:
+          - ""
+          - major
+          - minor
+          - patch
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  models: read
+
+jobs:
+  analyze-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should-release: ${{ steps.analysis.outputs.should-release }}
+      new-version: ${{ steps.analysis.outputs.new-version }}
+      version-bump: ${{ steps.analysis.outputs.version-bump }}
+      release-notes: ${{ steps.analysis.outputs.release-notes }}
+      is-tag-push: ${{ steps.analysis.outputs.is-tag-push }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for git operations
+
+      - name: Analyze changes for release
+        id: analysis
+        run: |
+          # Check if this is a tag push
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "🏷️ Tag push detected: ${{ github.ref_name }}"
+            TAG_VERSION="${{ github.ref_name }}"
+            # Remove 'v' prefix if present
+            CLEAN_VERSION=${TAG_VERSION#v}
+
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "new-version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+            echo "version-bump=tag" >> $GITHUB_OUTPUT
+            echo "is-tag-push=true" >> $GITHUB_OUTPUT
+            echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+            echo "## Release v$CLEAN_VERSION" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "Release created from tag push." >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "is-tag-push=false" >> $GITHUB_OUTPUT
+
+          # Check if this is a manual dispatch with forced version/bump
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ github.event.inputs.force_version }}" ]]; then
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "new-version=${{ github.event.inputs.force_version }}" >> $GITHUB_OUTPUT
+              echo "version-bump=manual" >> $GITHUB_OUTPUT
+              echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+              echo "## Release v${{ github.event.inputs.force_version }}" >> $GITHUB_OUTPUT
+              echo "" >> $GITHUB_OUTPUT
+              echo "Manual release triggered with version ${{ github.event.inputs.force_version }}." >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+              exit 0
+            elif [[ -n "${{ github.event.inputs.force_bump }}" ]]; then
+              # Get current version for forced bump calculation
+              CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "new-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+              echo "version-bump=${{ github.event.inputs.force_bump }}" >> $GITHUB_OUTPUT
+              echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+              echo "## Release v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+              echo "" >> $GITHUB_OUTPUT
+              echo "Manual release triggered with ${{ github.event.inputs.force_bump }} bump." >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # For regular pushes, don't create automatic releases
+          echo "ℹ️ No automatic release for regular pushes"
+          echo "should-release=false" >> $GITHUB_OUTPUT
+
+  test-and-lint:
+    needs: analyze-release
+    if: needs.analyze-release.outputs.should-release == 'true'
+    uses: ./.github/workflows/test-and-lint.yml
+
+  create-tag:
+    needs: [analyze-release, test-and-lint]
+    if: needs.analyze-release.outputs.should-release == 'true' && needs.analyze-release.outputs.is-tag-push != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag
+        run: |
+          NEW_VERSION="${{ needs.analyze-release.outputs.new-version }}"
+
+          # Validate version format
+          if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $NEW_VERSION"
+            exit 1
+          fi
+
+          # Check if tag already exists
+          if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
+            echo "❌ Tag v${NEW_VERSION} already exists"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "📦 Creating and pushing tag v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push origin "v${NEW_VERSION}"
+
+  release:
+    needs: [analyze-release, test-and-lint]
+    if: needs.analyze-release.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags
+
+      - uses: cli/gh-extension-precompile@v2
+        with:
+          generate_attestations: true
+          go_version_file: go.mod
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ needs.analyze-release.outputs.new-version }}"
+          VERSION_BUMP="${{ needs.analyze-release.outputs.version-bump }}"
+          RELEASE_NOTES="${{ needs.analyze-release.outputs.release-notes }}"
+
+          # Validate inputs
+          if [[ -z "$NEW_VERSION" || -z "$VERSION_BUMP" || -z "$RELEASE_NOTES" ]]; then
+            echo "❌ Missing required release information"
+            echo "Version: $NEW_VERSION"
+            echo "Bump: $VERSION_BUMP"
+            echo "Notes length: ${#RELEASE_NOTES}"
+            exit 1
+          fi
+
+          echo "🚀 Creating GitHub Release v${NEW_VERSION}"
+
+          # Create release with AI-generated notes
+          if gh release create "v${NEW_VERSION}" \
+            --title "Release v${NEW_VERSION} (${VERSION_BUMP})" \
+            --notes "${RELEASE_NOTES}" \
+            --latest; then
+            echo "✅ Release v${NEW_VERSION} created successfully"
+          else
+            echo "❌ Failed to create release"
+            exit 1
+          fi

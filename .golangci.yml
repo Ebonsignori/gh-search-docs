@@ -1,0 +1,150 @@
+# golangci-lint configuration file
+# See https://golangci-lint.run/usage/configuration/ for all available options
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+
+  govet:
+    enable:
+      - shadow
+    disable:
+      - fieldalignment
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/Ebonsignori/gh-search-docs
+
+  goconst:
+    min-len: 3
+    min-occurrences: 5
+
+  misspell:
+    locale: US
+
+  unparam:
+    check-exported: false
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+
+  funlen:
+    lines: 150
+    statements: 80
+
+  cyclop:
+    max-complexity: 50
+
+  lll:
+    line-length: 150
+
+  revive:
+    severity: warning
+    rules:
+      - name: var-naming
+      - name: indent-error-flow
+
+  mnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+
+linters:
+  disable-all: true
+  enable:
+    # Essential linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+
+    # Code quality
+    - gofmt
+    - goimports
+    - misspell
+    - unconvert
+    - whitespace
+
+    # Security (relaxed)
+    - gosec
+
+    # Style (relaxed)
+    - stylecheck
+    - revive
+
+issues:
+  exclude-rules:
+    # Allow fmt.Print* in CLI applications - this is expected for output
+    - linters:
+        - forbidigo
+      text: "use of `fmt\\.Print"
+
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - mnd
+        - funlen
+        - goconst
+        - gosec
+        - lll
+
+    # Allow longer lines in test data
+    - path: _test\.go
+      text: "line is.*characters long"
+
+    # Exclude known issues that are acceptable for CLI apps
+    - linters:
+        - gosec
+      text: "G404:" # Use of weak random number generator
+
+    # Exclude line length for go:generate comments
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+    # Allow unhandled errors in CLI output (common pattern)
+    - linters:
+        - errcheck
+      text: "Error return value.*is not checked"
+      source: "fmt\\.(Print|Printf|Println)"
+
+    # Allow unhandled errors for rendering (acceptable in CLI context)
+    - linters:
+        - errcheck
+      text: "Error return value.*Render.*is not checked"
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 20
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 5

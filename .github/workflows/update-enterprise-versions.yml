@@ -1,0 +1,108 @@
+name: Update Enterprise Versions
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Fetch and process enterprise versions
+        id: process
+        run: |
+          # Fetch the enterprise dates JSON
+          curl -s https://raw.githubusercontent.com/github/docs/refs/heads/main/src/ghes-releases/lib/enterprise-dates.json > enterprise-dates.json
+
+          # Process the JSON to determine supported versions
+          node -e "
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('enterprise-dates.json', 'utf8'));
+          const now = new Date();
+          const supportedVersions = [];
+
+          // Process each version to determine which are currently supported
+          Object.entries(data).forEach(([version, dates]) => {
+            const releaseDate = new Date(dates.releaseDate);
+            const deprecationDate = new Date(dates.deprecationDate);
+
+            // A version is considered supported if:
+            // 1. It has already been released (releaseDate <= now)
+            // 2. It has not yet been deprecated (deprecationDate > now)
+            // This prevents including future unreleased versions
+            if (releaseDate <= now && deprecationDate > now) {
+              supportedVersions.push(version);
+            }
+          });
+
+          // Sort versions (semantic sort for proper ordering)
+          supportedVersions.sort((a, b) => {
+            const parseVersion = (v) => {
+              const parts = v.split('.').map(n => parseInt(n, 10));
+              return { major: parts[0] || 0, minor: parts[1] || 0 };
+            };
+
+            const aVer = parseVersion(a);
+            const bVer = parseVersion(b);
+
+            if (aVer.major !== bVer.major) {
+              return aVer.major - bVer.major;
+            }
+            return aVer.minor - bVer.minor;
+          });
+
+          // Create the output structure
+          const output = {
+            lastUpdated: now.toISOString(),
+            supportedVersions: supportedVersions,
+            latestVersion: supportedVersions[supportedVersions.length - 1] || null
+          };
+
+          // Create data directory if it doesn't exist
+          if (!fs.existsSync('data')) {
+            fs.mkdirSync('data');
+          }
+
+          // Write to data/supported-versions.json
+          fs.writeFileSync('data/supported-versions.json', JSON.stringify(output, null, 2));
+
+          console.log('Supported versions:', supportedVersions);
+          console.log('Latest version:', output.latestVersion);
+          "
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet data/supported-versions.json; then
+            echo "No changes detected"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check-changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/supported-versions.json
+          git commit -m "Update supported enterprise versions"
+          git push
+
+      - name: Clean up temporary files
+        run: |
+          rm -f enterprise-dates.json
