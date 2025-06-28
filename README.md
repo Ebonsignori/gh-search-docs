@@ -69,7 +69,7 @@ gh search-docs --page 2 --size 20 "Git workflow"
 | Flag | Description |
 |------|-------------|
 | `--query` | Search query (can also be provided as positional argument) |
-| `--size` | Number of results to return (default: 10) |
+| `--size` | Number of results to return (max: 50, default: 5) |
 | `--version` | Docs version (`free-pro-team`, `enterprise-cloud`, or `enterprise-server@<3.13-3.17>`) |
 | `--language` | Language code (default: en) |
 | `--page` | Page number for pagination |

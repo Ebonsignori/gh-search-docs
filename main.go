@@ -11,7 +11,7 @@
 //
 // Flags:
 //
-//	--size        number of results to return (default: 5)
+//	--size        number of results to return (max: 50, default: 5)
 //	--version     docs version (free-pro-team, enterprise-cloud,
 //	              or enterprise-server@<3.13-3.17>)
 //	--language    language code (default: en)
@@ -138,7 +138,7 @@ func main() {
 	fs := flag.NewFlagSet("search-docs", flag.ExitOnError)
 
 	queryFlag := fs.String("query", "", "search query (can also be provided as positional argument)")
-	sizeFlag := fs.Int("size", 5, "number of results to return (default shows top 5 with links and descriptions)")
+	sizeFlag := fs.Int("size", 5, "number of results to return (max: 50, default shows top 5 with links and descriptions)")
 	versionFlag := fs.String("version", "free-pro-team", "docs version")
 	languageFlag := fs.String("language", "en", "language code")
 	pageFlag := fs.Int("page", 0, "page number for pagination")
@@ -206,6 +206,16 @@ func main() {
 
 	if query == "" {
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Validate size flag - GitHub Docs API has a maximum limit of 50
+	if *sizeFlag > 50 {
+		fmt.Fprintf(os.Stderr, "Error: --size cannot exceed 50 (GitHub Docs API limit). Use --page to navigate through more results.\n")
+		os.Exit(1)
+	}
+	if *sizeFlag < 1 {
+		fmt.Fprintf(os.Stderr, "Error: --size must be at least 1.\n")
 		os.Exit(1)
 	}
 
@@ -454,7 +464,12 @@ func main() {
 
 	// Show info about remaining results if there are more than shown
 	if maxResults == 5 && result.Meta.Found.Value > 5 && !*includeMatchedContentFlag {
-		fmt.Printf("Showing top 5 results. Use --size %d to see all %d results.\n", result.Meta.Found.Value, result.Meta.Found.Value)
+		if result.Meta.Found.Value <= 50 {
+			fmt.Printf("Showing top 5 results. Use --size %d to see all %d results.\n", result.Meta.Found.Value, result.Meta.Found.Value)
+		} else {
+			fmt.Printf("Showing top 5 results. Use --size 50 to see the maximum 50 results per page.\n")
+			fmt.Printf("Use --page to navigate through all %d results.\n", result.Meta.Found.Value)
+		}
 		fmt.Printf("Use --include-matched-content for highlighted matches instead of descriptions.\n\n")
 	}
 
