@@ -17,6 +17,10 @@ const modelName = process.env["GITHUB_MODELS_MODEL"] || "openai/o4-mini";
 const isTagBasedRelease = process.env["TAG_BASED_RELEASE"] === "true";
 const tagVersion = process.env["TAG_VERSION"];
 
+// Check for forced version/bump
+const forceVersion = process.env["FORCE_VERSION"];
+const forceBump = process.env["FORCE_BUMP"];
+
 if (!token) {
   console.error("GITHUB_TOKEN environment variable is required");
   process.exit(1);
@@ -101,7 +105,7 @@ class ReleaseAnalyzer {
       .join("\n\n")
       .slice(0, 15000); // Limit total input size
 
-    const prompt = `You are analyzing code changes for a GitHub CLI extension called "gh-ask-docs" to determine the appropriate semantic version bump and generate release notes.
+    const prompt = `You are analyzing code changes for a GitHub CLI extension called "gh-search-docs" to determine the appropriate semantic version bump and generate release notes.
 
 This is a Go-based CLI extension that helps users ask questions about documentation.
 
@@ -222,6 +226,20 @@ IMPORTANT: Respond only with valid JSON. Do not include any explanatory text bef
       if (isTagBasedRelease && tagVersion) {
         console.log(`🏷️ Tag-based release detected: v${tagVersion}`);
         return await this.handleTagBasedRelease(tagVersion);
+      }
+
+      // Handle forced version releases
+      if (forceVersion) {
+        console.log(`🔧 Forced version release: v${forceVersion}`);
+        return await this.handleForcedRelease(forceVersion, "manual");
+      }
+
+      // Handle forced bump releases
+      if (forceBump) {
+        console.log(`🔧 Forced bump release: ${forceBump}`);
+        const currentVersion = await this.getCurrentVersion();
+        const newVersion = this.calculateNewVersion(currentVersion, forceBump);
+        return await this.handleForcedRelease(newVersion, forceBump);
       }
 
       const lastTag = await this.getLastTag();
@@ -407,7 +425,7 @@ IMPORTANT: Respond only with valid JSON. Do not include any explanatory text bef
       .join("\n\n")
       .slice(0, 15000);
 
-    const prompt = `You are generating release notes for a GitHub CLI extension called "gh-ask-docs" version ${newVersion}.
+    const prompt = `You are generating release notes for a GitHub CLI extension called "gh-search-docs" version ${newVersion}.
 
 This is a ${versionBump} release from the previous version. The version was manually tagged as v${newVersion}.
 
@@ -470,6 +488,64 @@ Return only the release notes content, no JSON or other formatting.`;
     console.log(
       "\nAnalysis complete! Results written to release-analysis.json",
     );
+  }
+
+  async handleForcedRelease(newVersion, versionBump) {
+    try {
+      const currentVersion = await this.getCurrentVersion();
+
+      console.log(
+        `Generating AI release notes for forced ${versionBump} release`,
+      );
+      console.log(`Version: ${currentVersion} -> ${newVersion}`);
+
+      const lastTag = await this.getLastTag();
+      const changedFiles = await this.getChangedFiles(lastTag);
+
+      if (changedFiles.length === 0) {
+        console.log("No changes detected, creating minimal release notes");
+        const result = {
+          current_version: currentVersion,
+          new_version: newVersion,
+          version_bump: versionBump,
+          reasoning: `Forced ${versionBump} release`,
+          release_notes: `## Release v${newVersion}\n\nForced ${versionBump} release. No significant changes detected since the last release.`,
+          changed_files: [],
+        };
+
+        this.writeResults(result);
+        return;
+      }
+
+      // Generate AI release notes for the forced release
+      const releaseNotes = await this.generateReleaseNotesOnly(
+        changedFiles,
+        lastTag,
+        newVersion,
+        versionBump,
+      );
+
+      const result = {
+        current_version: currentVersion,
+        new_version: newVersion,
+        version_bump: versionBump,
+        reasoning: `Forced ${versionBump} release with AI-generated notes`,
+        release_notes: releaseNotes,
+        changed_files: changedFiles,
+      };
+
+      this.writeResults(result);
+
+      console.log("\n=== Forced Release Results ===");
+      console.log(`Previous Version: ${currentVersion}`);
+      console.log(`New Version: ${newVersion}`);
+      console.log(`Version Bump: ${versionBump}`);
+      console.log("\nAI-Generated Release Notes:");
+      console.log(releaseNotes);
+    } catch (error) {
+      console.error("Error handling forced release:", error.message);
+      process.exit(1);
+    }
   }
 }
 

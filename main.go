@@ -87,6 +87,50 @@ func (s *StringSlice) Set(value string) error {
 	return nil
 }
 
+// reorderArgs separates flags from non-flag arguments and returns them with flags first.
+// This allows flags to be specified after the query (e.g., "query" --debug).
+func reorderArgs(args []string) []string {
+	var flags []string
+	var nonFlags []string
+
+	// Boolean flags that don't take values
+	boolFlags := map[string]bool{
+		"--debug":                   true,
+		"--plain":                   true,
+		"--list-versions":           true,
+		"--include-matched-content": true,
+	}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "-") {
+			// Check if flag contains '=' (e.g., --size=5)
+			if strings.Contains(arg, "=") {
+				// Flag with embedded value, add as-is
+				flags = append(flags, arg)
+			} else if boolFlags[arg] {
+				// Boolean flag, no value expected
+				flags = append(flags, arg)
+			} else {
+				// Flag that expects a value
+				flags = append(flags, arg)
+				// Check if the next argument exists and doesn't start with "-"
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+					// Include the flag's value
+					i++
+					flags = append(flags, args[i])
+				}
+			}
+		} else {
+			// This is a non-flag argument (part of the query)
+			nonFlags = append(nonFlags, arg)
+		}
+	}
+
+	// Return flags first, then non-flag arguments
+	return append(flags, nonFlags...)
+}
+
 func main() {
 	//----------------------------------------------------------------------
 	// Flags
@@ -126,7 +170,10 @@ func main() {
 		fs.PrintDefaults()
 	}
 
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	// Reorder arguments to allow flags after the query
+	reorderedArgs := reorderArgs(os.Args[1:])
+
+	if err := fs.Parse(reorderedArgs); err != nil {
 		searchdocs.Fatal(err)
 	}
 

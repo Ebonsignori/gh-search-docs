@@ -1148,3 +1148,74 @@ func TestBoundaryValues(t *testing.T) {
 		})
 	}
 }
+
+func TestReorderArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "flags before query",
+			input:    []string{"--debug", "--size", "5", "ssh key"},
+			expected: []string{"--debug", "--size", "5", "ssh key"},
+		},
+		{
+			name:     "flags after query",
+			input:    []string{"ssh key", "--debug", "--size", "5"},
+			expected: []string{"--debug", "--size", "5", "ssh key"},
+		},
+		{
+			name:     "mixed flags and query",
+			input:    []string{"--debug", "ssh key", "--size", "5"},
+			expected: []string{"--debug", "--size", "5", "ssh key"},
+		},
+		{
+			name:     "flag with equals",
+			input:    []string{"ssh key", "--size=5", "--debug"},
+			expected: []string{"--size=5", "--debug", "ssh key"},
+		},
+		{
+			name:     "boolean flags only",
+			input:    []string{"ssh key", "--debug", "--plain"},
+			expected: []string{"--debug", "--plain", "ssh key"},
+		},
+		{
+			name:     "repeated flags",
+			input:    []string{"ssh", "--include", "intro", "--include", "headings", "key"},
+			expected: []string{"--include", "intro", "--include", "headings", "ssh", "key"},
+		},
+		{
+			name:     "no flags",
+			input:    []string{"ssh", "key", "authentication"},
+			expected: []string{"ssh", "key", "authentication"},
+		},
+		{
+			name:     "only flags",
+			input:    []string{"--debug", "--size", "5"},
+			expected: []string{"--debug", "--size", "5"},
+		},
+		{
+			name:     "quoted query with flags",
+			input:    []string{"ssh key", "--format=json"},
+			expected: []string{"--format=json", "ssh key"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := reorderArgs(tt.input)
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for i, arg := range result {
+				if arg != tt.expected[i] {
+					t.Errorf("At position %d: expected %q, got %q", i, tt.expected[i], arg)
+				}
+			}
+		})
+	}
+}

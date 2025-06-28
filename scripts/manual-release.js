@@ -38,7 +38,7 @@ try {
     version_bump: versionBump,
     reasoning: `Manual ${versionBump} version bump`,
     release_notes: `## Release v${newVersion}\n\nManual release triggered with ${versionBump} version bump.`,
-    changed_files: []
+    changed_files: [],
   };
 
   // Write results to file for GitHub Actions to consume
@@ -49,12 +49,14 @@ try {
     const outputs = [
       `new-version=${newVersion}`,
       `version-bump=${versionBump}`,
-      `release-notes<<EOF\n${result.release_notes}\nEOF`
+      `release-notes<<EOF\n${result.release_notes}\nEOF`,
     ];
     fs.appendFileSync(process.env.GITHUB_OUTPUT, outputs.join("\n") + "\n");
   }
 
-  console.log(`Manual release configured: ${currentVersion} -> ${newVersion} (${versionBump})`);
+  console.log(
+    `Manual release configured: ${currentVersion} -> ${newVersion} (${versionBump})`,
+  );
 } catch (error) {
   console.error("Error:", error.message);
   process.exit(1);

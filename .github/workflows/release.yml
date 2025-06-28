@@ -39,9 +39,24 @@ jobs:
         with:
           fetch-depth: 0 # Need full history for git operations
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          cd scripts
+          npm install
+
       - name: Analyze changes for release
         id: analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_MODELS_MODEL: "openai/gpt-4.1"
         run: |
+          cd scripts
+
           # Check if this is a tag push
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "🏷️ Tag push detected: ${{ github.ref_name }}"
@@ -49,15 +64,13 @@ jobs:
             # Remove 'v' prefix if present
             CLEAN_VERSION=${TAG_VERSION#v}
 
+            # Set tag-specific environment variable for the script
+            export TAG_BASED_RELEASE="true"
+            export TAG_VERSION="$CLEAN_VERSION"
+
+            npm run analyze-release
             echo "should-release=true" >> $GITHUB_OUTPUT
-            echo "new-version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-            echo "version-bump=tag" >> $GITHUB_OUTPUT
             echo "is-tag-push=true" >> $GITHUB_OUTPUT
-            echo "release-notes<<EOF" >> $GITHUB_OUTPUT
-            echo "## Release v$CLEAN_VERSION" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "Release created from tag push." >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -66,38 +79,64 @@ jobs:
           # Check if this is a manual dispatch with forced version/bump
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ -n "${{ github.event.inputs.force_version }}" ]]; then
+              echo "🔧 Manual release with forced version: ${{ github.event.inputs.force_version }}"
+              export FORCE_VERSION="${{ github.event.inputs.force_version }}"
+              npm run analyze-release
               echo "should-release=true" >> $GITHUB_OUTPUT
-              echo "new-version=${{ github.event.inputs.force_version }}" >> $GITHUB_OUTPUT
-              echo "version-bump=manual" >> $GITHUB_OUTPUT
-              echo "release-notes<<EOF" >> $GITHUB_OUTPUT
-              echo "## Release v${{ github.event.inputs.force_version }}" >> $GITHUB_OUTPUT
-              echo "" >> $GITHUB_OUTPUT
-              echo "Manual release triggered with version ${{ github.event.inputs.force_version }}." >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
               exit 0
             elif [[ -n "${{ github.event.inputs.force_bump }}" ]]; then
-              # Get current version for forced bump calculation
-              CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
+              echo "🔧 Manual release with forced bump: ${{ github.event.inputs.force_bump }}"
+              export FORCE_BUMP="${{ github.event.inputs.force_bump }}"
+              npm run analyze-release
               echo "should-release=true" >> $GITHUB_OUTPUT
-              echo "new-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-              echo "version-bump=${{ github.event.inputs.force_bump }}" >> $GITHUB_OUTPUT
-              echo "release-notes<<EOF" >> $GITHUB_OUTPUT
-              echo "## Release v$CURRENT_VERSION" >> $GITHUB_OUTPUT
-              echo "" >> $GITHUB_OUTPUT
-              echo "Manual release triggered with ${{ github.event.inputs.force_bump }} bump." >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
               exit 0
             fi
           fi
 
-          # For regular pushes, don't create automatic releases
-          echo "ℹ️ No automatic release for regular pushes"
-          echo "should-release=false" >> $GITHUB_OUTPUT
+          # Run the AI analysis
+          if ! npm run analyze-release; then
+            echo "❌ Analysis script failed"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Check if we have a new version (indicating changes were found)
+          if [[ -f "release-analysis.json" ]]; then
+            # Validate JSON file first
+            if ! jq empty release-analysis.json 2>/dev/null; then
+              echo "❌ Invalid JSON in release-analysis.json"
+              echo "should-release=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            NEW_VERSION=$(cat release-analysis.json | jq -r '.new_version')
+            VERSION_BUMP=$(cat release-analysis.json | jq -r '.version_bump')
+            RELEASE_NOTES=$(cat release-analysis.json | jq -r '.release_notes')
+
+            # Set outputs that are always available
+            echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+            echo "version-bump=${VERSION_BUMP}" >> $GITHUB_OUTPUT
+            echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+            echo "${RELEASE_NOTES}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+            if [[ "$NEW_VERSION" != "null" && "$NEW_VERSION" != "" ]]; then
+              echo "✅ Release recommended: version $NEW_VERSION"
+              echo "should-release=true" >> $GITHUB_OUTPUT
+            else
+              echo "ℹ️ No release needed - no significant changes detected"
+              echo "should-release=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ Analysis file not created"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
   test-and-lint:
     needs: analyze-release
     if: needs.analyze-release.outputs.should-release == 'true'
-    uses: ./.github/workflows/test-and-lint.yml
+    uses: Ebonsignori/gh-search-docs/.github/workflows/test-and-lint.yml@main
 
   create-tag:
     needs: [analyze-release, test-and-lint]
@@ -151,11 +190,10 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ needs.analyze-release.outputs.new-version }}
+          VERSION_BUMP: ${{ needs.analyze-release.outputs.version-bump }}
+          RELEASE_NOTES: ${{ needs.analyze-release.outputs.release-notes }}
         run: |
-          NEW_VERSION="${{ needs.analyze-release.outputs.new-version }}"
-          VERSION_BUMP="${{ needs.analyze-release.outputs.version-bump }}"
-          RELEASE_NOTES="${{ needs.analyze-release.outputs.release-notes }}"
-
           # Validate inputs
           if [[ -z "$NEW_VERSION" || -z "$VERSION_BUMP" || -z "$RELEASE_NOTES" ]]; then
             echo "❌ Missing required release information"
@@ -165,15 +203,15 @@ jobs:
             exit 1
           fi
 
-          echo "🚀 Creating GitHub Release v${NEW_VERSION}"
+          echo "🚀 Updating GitHub Release v${NEW_VERSION}"
 
-          # Create release with AI-generated notes
-          if gh release create "v${NEW_VERSION}" \
+          # Update the existing release created by gh-extension-precompile with AI-generated notes
+          if gh release edit "v${NEW_VERSION}" \
             --title "Release v${NEW_VERSION} (${VERSION_BUMP})" \
-            --notes "${RELEASE_NOTES}" \
+            --notes "$RELEASE_NOTES" \
             --latest; then
-            echo "✅ Release v${NEW_VERSION} created successfully"
+            echo "✅ Release v${NEW_VERSION} updated successfully"
           else
-            echo "❌ Failed to create release"
+            echo "❌ Failed to update release"
             exit 1
           fi
