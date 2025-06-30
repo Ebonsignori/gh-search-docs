@@ -1,6 +1,6 @@
 # Search (GitHub) Docs CLI
 
-[![CI](https://github.com/Ebonsignori/gh-search-docs/workflows/CI/badge.svg)](https://github.com/Ebonsignori/gh-search-docs/actions)
+[![Test and Lint](https://github.com/Ebonsignori/gh-search-docs/actions/workflows/test-and-lint.yml/badge.svg)](https://github.com/Ebonsignori/gh-search-docs/actions/workflows/test-and-lint.yml)
 
 A [CLI Extension](https://docs.github.com/en/github-cli/github-cli/using-github-cli-extensions) for the [GitHub CLI](https://cli.github.com/) that lets you search the GitHub documentation using the official GitHub documentation search API.
 
