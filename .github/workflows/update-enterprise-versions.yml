@@ -64,34 +64,58 @@ jobs:
             return aVer.minor - bVer.minor;
           });
 
-          // Create the output structure
-          const output = {
-            lastUpdated: now.toISOString(),
-            supportedVersions: supportedVersions,
-            latestVersion: supportedVersions[supportedVersions.length - 1] || null
-          };
-
-          // Create data directory if it doesn't exist
-          if (!fs.existsSync('data')) {
-            fs.mkdirSync('data');
+          // Read existing data to compare versions
+          let existingSupportedVersions = [];
+          if (fs.existsSync('data/supported-versions.json')) {
+            try {
+              const existingData = JSON.parse(fs.readFileSync('data/supported-versions.json', 'utf8'));
+              existingSupportedVersions = existingData.supportedVersions || [];
+            } catch (e) {
+              console.log('Could not parse existing data, treating as empty');
+            }
           }
 
-          // Write to data/supported-versions.json
-          fs.writeFileSync('data/supported-versions.json', JSON.stringify(output, null, 2));
+          // Compare versions to determine if there are actual changes
+          const versionsChanged = JSON.stringify(existingSupportedVersions.sort()) !== JSON.stringify(supportedVersions.sort());
 
-          console.log('Supported versions:', supportedVersions);
-          console.log('Latest version:', output.latestVersion);
+          console.log('Existing supported versions:', existingSupportedVersions);
+          console.log('New supported versions:', supportedVersions);
+          console.log('Versions changed:', versionsChanged);
+
+          // Only update the file if versions have actually changed
+          if (versionsChanged) {
+            // Create the output structure
+            const output = {
+              lastUpdated: now.toISOString(),
+              supportedVersions: supportedVersions,
+              latestVersion: supportedVersions[supportedVersions.length - 1] || null
+            };
+
+            // Create data directory if it doesn't exist
+            if (!fs.existsSync('data')) {
+              fs.mkdirSync('data');
+            }
+
+            // Write to data/supported-versions.json
+            fs.writeFileSync('data/supported-versions.json', JSON.stringify(output, null, 2));
+            console.log('Updated supported-versions.json');
+          } else {
+            console.log('No version changes detected, keeping existing file');
+          }
+
+          // Export the result for the next step
+          fs.writeFileSync('versions-changed.txt', versionsChanged.toString());
           "
 
       - name: Check for changes
         id: check-changes
         run: |
-          if git diff --quiet data/supported-versions.json; then
-            echo "No changes detected"
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "Changes detected"
+          if [ "$(cat versions-changed.txt)" = "true" ]; then
+            echo "Version changes detected"
             echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No version changes detected"
+            echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and push changes
@@ -105,4 +129,4 @@ jobs:
 
       - name: Clean up temporary files
         run: |
-          rm -f enterprise-dates.json
+          rm -f enterprise-dates.json versions-changed.txt
