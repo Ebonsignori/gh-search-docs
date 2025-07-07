@@ -21,6 +21,7 @@ func TestDefaultBehaviorWithoutFlags(t *testing.T) {
 	params.Set("size", "5")                // default size
 	params.Set("version", "free-pro-team") // default version
 	params.Set("language", "en")           // default language
+	params.Set("client_name", "gh-search-docs")
 
 	// Default behavior - include intro
 	params.Add("include", "intro")

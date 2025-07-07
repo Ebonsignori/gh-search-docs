@@ -169,6 +169,7 @@ func TestURLConstruction(t *testing.T) {
 			params.Set("size", strconv.Itoa(tt.size))
 			params.Set("version", tt.version)
 			params.Set("language", tt.language)
+			params.Set("client_name", "gh-search-docs")
 
 			if tt.page > 0 {
 				params.Set("page", strconv.Itoa(tt.page))
@@ -720,6 +721,7 @@ func TestURLConstructionEdgeCases(t *testing.T) {
 			params.Set("size", "5")
 			params.Set("version", "free-pro-team")
 			params.Set("language", "en")
+			params.Set("client_name", "gh-search-docs")
 
 			if tt.includeMatchedContent {
 				params.Add("highlights", "content_explicit")

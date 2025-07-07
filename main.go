@@ -234,6 +234,7 @@ func main() {
 	params.Set("size", strconv.Itoa(*sizeFlag))
 	params.Set("version", version)
 	params.Set("language", *languageFlag)
+	params.Set("client_name", "gh-search-docs")
 
 	if *pageFlag > 0 {
 		params.Set("page", strconv.Itoa(*pageFlag))
